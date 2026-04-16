@@ -102,28 +102,6 @@ Subscribe to events:
 
 Set `STREAM_WEBHOOK_SECRET` in your environment to match Stream.
 
-## Deploying to Vercel
-
-Important: Vercel does not host your Docker database container. Use a managed PostgreSQL provider for production.
-
-1. Push repository to GitHub.
-2. Import project in Vercel.
-3. Add all environment variables from `.env.example` in Vercel Project Settings.
-4. Set `DATABASE_URL` to your managed PostgreSQL connection string.
-5. Run production migrations:
-
-```bash
-npx prisma migrate deploy
-```
-
-6. Deploy.
-
-Optional CLI deploy:
-
-```bash
-vercel --prod
-```
-
 ## Notes
 
 - Keep `.env` out of version control.
