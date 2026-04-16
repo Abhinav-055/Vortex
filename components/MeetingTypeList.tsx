@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 
 import HomeCard from "./HomeCard";
 import MeetingModal from "./MeetingModal";
-import { Call, useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { useUser } from "@clerk/nextjs";
 import Loader from "./Loader";
 import { Textarea } from "./ui/textarea";
-import ReactDatePicker from "react-datepicker";
 import { useToast } from "./ui/use-toast";
+import { useApiClient } from "@/lib/api-client";
 // import { Input } from './ui/input';
 
 const initialValues = {
@@ -19,42 +18,73 @@ const initialValues = {
   link: "",
 };
 
+const toLocalDateTimeInputValue = (date: Date) => {
+  const offsetInMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetInMs).toISOString().slice(0, 16);
+};
+
+const getJoinPathFromInput = (rawLink: string) => {
+  const trimmed = rawLink.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith("/")) {
+    return trimmed;
+  }
+
+  try {
+    const parsedUrl = new URL(trimmed);
+    return `${parsedUrl.pathname}${parsedUrl.search}`;
+  } catch {
+    return `/meeting/${trimmed}`;
+  }
+};
+
 const MeetingTypeList = () => {
   const router = useRouter();
   const [meetingState, setMeetingState] = useState<
     "isScheduleMeeting" | "isJoiningMeeting" | "isInstantMeeting" | undefined
   >(undefined);
   const [values, setValues] = useState(initialValues);
-  const [callDetail, setCallDetail] = useState<Call>();
-  const client = useStreamVideoClient();
+  const [callDetail, setCallDetail] = useState<{ streamCallId: string }>();
   const { user } = useUser();
   const { toast } = useToast();
+  const { createMeeting: createMeetingRequest } = useApiClient();
 
-  const createMeeting = async () => {
-    if (!client || !user) return;
+  const handleJoinByLink = () => {
+    const joinPath = getJoinPathFromInput(values.link);
+
+    if (!joinPath) {
+      toast({ title: "Please paste a meeting link" });
+      return;
+    }
+
+    router.push(joinPath);
+  };
+
+  const handleCreateMeeting = async () => {
+    if (!user) return;
+
     try {
       if (!values.dateTime) {
         toast({ title: "Please select a date and time" });
         return;
       }
-      const id = crypto.randomUUID();
-      const call = client.call("default", id);
-      if (!call) throw new Error("Failed to create meeting");
-      const startsAt =
-        values.dateTime.toISOString() || new Date(Date.now()).toISOString();
-      const description = values.description || "Instant Meeting";
-      await call.getOrCreate({
-        data: {
-          starts_at: startsAt,
-          custom: {
-            description,
-          },
-        },
+
+      const response = await createMeetingRequest({
+        title: values.description || "Instant Meeting",
+        description: values.description || "Instant Meeting",
+        scheduledAt: values.dateTime.toISOString(),
       });
-      setCallDetail(call);
-      if (!values.description) {
-        router.push(`/meeting/${call.id}`);
+
+      setCallDetail({ streamCallId: response.streamCallId });
+
+      if (meetingState === "isInstantMeeting") {
+        router.push(response.joinUrl);
       }
+
       toast({
         title: "Meeting Created",
       });
@@ -64,9 +94,14 @@ const MeetingTypeList = () => {
     }
   };
 
-  if (!client || !user) return <Loader />;
+  if (!user) return <Loader />;
 
-  const meetingLink = `${process.env.NEXT_PUBLIC_BASE_URL}/meeting/${callDetail?.id}`;
+  const appBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+  const meetingLink = callDetail
+    ? `${appBaseUrl}/meeting/${callDetail.streamCallId}`
+    : "";
 
   return (
     <section className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -103,7 +138,7 @@ const MeetingTypeList = () => {
           isOpen={meetingState === "isScheduleMeeting"}
           onClose={() => setMeetingState(undefined)}
           title="Create Meeting"
-          handleClick={createMeeting}
+          handleClick={handleCreateMeeting}
         >
           <div className="flex flex-col gap-2.5">
             <label className="text-base font-normal leading-[22.4px] text-sky-2">
@@ -120,15 +155,16 @@ const MeetingTypeList = () => {
             <label className="text-base font-normal leading-[22.4px] text-sky-2">
               Select Date and Time
             </label>
-            <ReactDatePicker
-              selected={values.dateTime}
-              onChange={(date) => setValues({ ...values, dateTime: date! })}
-              showTimeSelect
-              timeFormat="HH:mm"
-              timeIntervals={15}
-              timeCaption="time"
-              dateFormat="MMMM d, yyyy h:mm aa"
-              className="w-full rounded bg-dark-3 p-2 focus:outline-none"
+            <input
+              type="datetime-local"
+              value={toLocalDateTimeInputValue(values.dateTime)}
+              min={toLocalDateTimeInputValue(new Date())}
+              onChange={(e) => {
+                const nextDate = new Date(e.target.value);
+                if (Number.isNaN(nextDate.getTime())) return;
+                setValues({ ...values, dateTime: nextDate });
+              }}
+              className="w-full rounded bg-dark-3 p-2 text-white focus:outline-none"
             />
           </div>
         </MeetingModal>
@@ -154,13 +190,15 @@ const MeetingTypeList = () => {
         title="Type the link here"
         className="text-center"
         buttonText="Join Meeting"
-        handleClick={() => router.push(values.link)}
+        handleClick={handleJoinByLink}
       >
-        {/* <Input
-          placeholder="Meeting link"
+        <input
+          type="text"
+          placeholder="Paste meeting link or meeting ID"
+          value={values.link}
           onChange={(e) => setValues({ ...values, link: e.target.value })}
-          className="border-none bg-dark-3 focus-visible:ring-0 focus-visible:ring-offset-0"
-        /> */}
+          className="w-full rounded-md border-none bg-dark-3 px-3 py-2 text-white focus:outline-none"
+        />
       </MeetingModal>
 
       <MeetingModal
@@ -169,7 +207,7 @@ const MeetingTypeList = () => {
         title="Start an Instant Meeting"
         className="text-center"
         buttonText="Start Meeting"
-        handleClick={createMeeting}
+        handleClick={handleCreateMeeting}
       />
     </section>
   );

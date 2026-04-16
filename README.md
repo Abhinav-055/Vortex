@@ -1,111 +1,130 @@
-## Overview
+# Vortex - Video Conferencing App
 
-This is a fully functional video calling application built using modern web technologies. The app allows users to create and join video conferencing rooms where multiple participants can communicate in real-time. The app leverages Clerk.js for secure user authentication, Stream SDK for WebRTC connections, and is built with Next.js for a seamless user experience.
+Vortex is a Next.js video conferencing app using Clerk authentication and Stream Video.
+It includes a Node-style API layer through Next.js route handlers, Prisma + PostgreSQL persistence, Stream webhook handling, and signed recording URLs.
+
+## Stack
+
+- Next.js 14 (App Router) + TypeScript + Tailwind + shadcn/ui
+- Clerk for auth
+- Stream Video SDK for calls
+- Prisma ORM + PostgreSQL
+- Local PostgreSQL via Docker Compose
 
 ## Features
 
-- **User Authentication:** Powered by Clerk.js, ensuring secure and easy login and registration for users.
-- **Video Conferencing:** Create and join video rooms with multiple participants.
-- **Real-Time Communication:** Utilizes Stream SDK to establish WebRTC connections for real-time video and audio communication between users.
-- **Scalable Architecture:** Built on Next.js, offering server-side rendering, optimized performance, and a scalable foundation.
+- Create instant and scheduled meetings
+- Join meetings by shared link
+- Upcoming/Previous meeting lists from database APIs
+- Recording ingestion from Stream webhooks and API sync fallback
+- Signed recording playback URLs (no raw recording URL exposure)
 
-## Technology Stack
+## Prerequisites
 
-- **Next.js:** Framework for building the application with server-side rendering and static site generation.
-- **Clerk.js:** Handles user authentication and management, providing a secure and user-friendly experience.
-- **Stream SDK:** Provides WebRTC support for real-time video and audio communication.
+- Node.js 18+
+- Docker Desktop
+- Clerk account and keys
+- Stream account and keys
 
-## Getting Started
+## Environment Variables
 
-### Prerequisites
-
-Before you start, make sure you have the following installed:
-
-- Node.js
-- npm or yarn
-- A Clerk.js account
-- A Stream SDK account
-
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone 
-   cd video-calling-app
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
-
-### Set up environment variables:
-
-Create a `.env.local` file in the root directory and add the following:
+Copy `.env.example` to `.env` and fill values:
 
 ```bash
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<your-clerk-publishable-key>
-CLERK_SECRET_KEY=<your-clerk-secret-key>
-
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-
-NEXT_PUBLIC_STREAM_API_KEY=<your-stream-api-key>
-STREAM_SECRET_KEY=<your-stream-secret-key>
+cp .env.example .env
 ```
 
-Replace `<your-clerk-publishable-key>`, `<your-clerk-secret-key>`, `<your-stream-api-key>`, and `<your-stream-secret-key>` with your actual keys.
+Required keys are documented in `.env.example`.
 
-4. **Run the application:**
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   ```
+## Local Setup (Docker + Prisma + Next)
 
-   Your app should now be running on [http://localhost:3000](http://localhost:3000).
+1. Install dependencies:
 
-## Usage
+```bash
+npm install
+```
 
-1. **Sign Up/Sign In:**
-   Users can sign up or sign in using the Clerk.js authentication form.
+2. Start local PostgreSQL container:
 
-2. **Create a Room:**
-   Once authenticated, users can create a new video conference room.
+```bash
+docker compose up -d postgres
+```
 
-3. **Join a Room:**
-   Users can join an existing room by entering the room ID or following a shared link.
+3. Run migrations:
 
-4. **Real-Time Communication:**
-   After joining a room, users will be connected via Stream SDK’s WebRTC service, enabling real-time video and audio communication.
+```bash
+npx prisma migrate dev --name init
+```
 
-## Deployment
+4. Generate Prisma client:
 
-The app is already live and hosted at [vortex.devpixel.site](https://vortex.devpixel.site). 
+```bash
+npx prisma generate
+```
 
-For further development or deployment:
+5. Start development server:
 
-1. **Deploy to Vercel:**
-   ```bash
-   vercel
-   ```
+```bash
+npm run dev
+```
 
-2. **Set environment variables in Vercel:**
-   Make sure to add the same environment variables from your `.env.local` file to the Vercel dashboard.
+6. Open the app:
 
-3. **Access your deployed app:**
-   Your app will be live at the domain provided by Vercel or another chosen hosting service.
+`http://localhost:3000` (or next available port)
 
-## Contributing
+## Helpful Commands
 
-Contributions are welcome! Please feel free to submit a Pull Request or open an issue if you have any suggestions or improvements.
+```bash
+# type check
+npx tsc --noEmit
 
-## License
+# production build
+npm run build
 
-This project is licensed under the MIT License.
+# stop local db
+docker compose down
 
----
+# stop local db and remove volume
+docker compose down -v
+```
 
-Feel free to reach out with any questions or feedback. Happy coding!
+## Stream Webhooks
+
+Configure Stream webhook endpoint:
+
+`https://YOUR_DOMAIN/api/webhooks/stream`
+
+Subscribe to events:
+
+- `call.started`
+- `call.ended`
+- `call.recording_ready`
+
+Set `STREAM_WEBHOOK_SECRET` in your environment to match Stream.
+
+## Deploying to Vercel
+
+Important: Vercel does not host your Docker database container. Use a managed PostgreSQL provider for production.
+
+1. Push repository to GitHub.
+2. Import project in Vercel.
+3. Add all environment variables from `.env.example` in Vercel Project Settings.
+4. Set `DATABASE_URL` to your managed PostgreSQL connection string.
+5. Run production migrations:
+
+```bash
+npx prisma migrate deploy
+```
+
+6. Deploy.
+
+Optional CLI deploy:
+
+```bash
+vercel --prod
+```
+
+## Notes
+
+- Keep `.env` out of version control.
+- For local Docker DB, `POSTGRES_*` values in `.env` are consumed by `docker-compose.yml`.

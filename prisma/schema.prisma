@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  meetings   MeetingParticipant[]
+  recordings Recording[]
+}
+
+model Meeting {
+  id           String        @id @default(cuid())
+  title        String
+  description  String?
+  streamCallId String        @unique
+  hostId       String
+  scheduledAt  DateTime?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  status       MeetingStatus @default(SCHEDULED)
+  createdAt    DateTime      @default(now())
+
+  participants MeetingParticipant[]
+  recordings   Recording[]
+}
+
+model MeetingParticipant {
+  id        String   @id @default(cuid())
+  meetingId String
+  userId    String
+  joinedAt  DateTime @default(now())
+
+  meeting Meeting @relation(fields: [meetingId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([meetingId, userId])
+}
+
+model Recording {
+  id           String   @id @default(cuid())
+  meetingId    String
+  uploadedById String
+  rawUrl       String
+  filename     String?
+  durationSecs Int?
+  createdAt    DateTime @default(now())
+
+  meeting    Meeting @relation(fields: [meetingId], references: [id])
+  uploadedBy User    @relation(fields: [uploadedById], references: [id])
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  CANCELLED
+}
